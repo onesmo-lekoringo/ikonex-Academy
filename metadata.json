@@ -1,0 +1,6 @@
+{
+  "name": "Ikonex Academy SMS",
+  "description": "An interactive, fully featured Student Management System for Ikonex Academy, featuring class stream orchestration, student rosters, subject alignment, structured gradebooks, rankings processing, and a database schema playground.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
