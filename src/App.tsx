@@ -4,7 +4,7 @@
  */
 
 import React, { useState, useMemo } from 'react';
-import { Stream, Student, Subject, Score, GradeBoundary } from './types';
+import { Stream, Student, Subject, Score, GradeBoundary, User } from './types';
 import { 
   INITIAL_STREAMS, 
   INITIAL_STUDENTS, 
@@ -15,13 +15,17 @@ import {
 } from './data/mockData';
 
 // Component Imports
+import Login from './components/Login';
+import { signOut, onAuthStateChanged } from 'firebase/auth';
+import { auth } from './firebase';
+
+// Component Imports
 import Dashboard from './components/Dashboard';
 import StreamManager from './components/StreamManager';
 import StudentManager from './components/StudentManager';
 import SubjectManager from './components/SubjectManager';
 import Gradebook from './components/Gradebook';
 import Rankings from './components/Rankings';
-import DatabaseViewer from './components/DatabaseViewer';
 
 // Icon imports
 import { 
@@ -31,11 +35,56 @@ import {
   BookOpen, 
   PencilLine, 
   Trophy, 
-  Database,
-  GraduationCap
+  GraduationCap,
+  LogOut,
+  Menu,
+  X
 } from 'lucide-react';
 
 export default function App() {
+  // User Authentication State
+  const [currentUser, setCurrentUser] = useState<User | null>(() => {
+    const saved = localStorage.getItem('ikonex_user');
+    return saved ? JSON.parse(saved) : null;
+  });
+
+  // Mobile navigation drawer toggle
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+
+  const handleLoginSuccess = (user: User) => {
+    setCurrentUser(user);
+    localStorage.setItem('ikonex_user', JSON.stringify(user));
+  };
+
+  const handleLogout = async () => {
+    try {
+      await signOut(auth);
+    } catch (err) {
+      console.error('Error signing out:', err);
+    }
+  };
+
+  // Listen to Firebase Auth state changes
+  React.useEffect(() => {
+    const unsubscribe = onAuthStateChanged(auth, (fbUser) => {
+      if (fbUser) {
+        const localUser = {
+          id: fbUser.uid,
+          username: fbUser.email?.split('@')[0] || 'admin',
+          email: fbUser.email || '',
+          name: fbUser.displayName || fbUser.email?.split('@')[0] || 'Administrator',
+          role: 'Admin'
+        };
+        setCurrentUser(localUser);
+        localStorage.setItem('ikonex_user', JSON.stringify(localUser));
+      } else {
+        setCurrentUser(null);
+        localStorage.removeItem('ikonex_user');
+      }
+    });
+    return () => unsubscribe();
+  }, []);
+
   // 1. Backend API State core setup
   const [streams, setStreams] = useState<Stream[]>([]);
   const [students, setStudents] = useState<Student[]>([]);
@@ -51,12 +100,23 @@ export default function App() {
   // Highlighting specific student report card
   const [selectedStudentProfileId, setSelectedStudentProfileId] = useState<string | null>(null);
 
+  // Custom fetch helper that automatically attaches Firebase Auth Token
+  const authenticatedFetch = async (url: string, options: RequestInit = {}) => {
+    const token = await auth.currentUser?.getIdToken();
+    const headers = {
+      ...options.headers,
+      'Authorization': `Bearer ${token}`
+    };
+    return fetch(url, { ...options, headers });
+  };
+
   // Load all system data from the PostgreSQL backend on startup
   React.useEffect(() => {
+    if (!currentUser) return;
     async function loadData() {
       try {
         setIsLoading(true);
-        const res = await fetch('/api/all');
+        const res = await authenticatedFetch('/api/all');
         if (!res.ok) throw new Error('Failed to load database records from server.');
         const data = await res.json();
         setStreams(data.streams);
@@ -73,7 +133,7 @@ export default function App() {
       }
     }
     loadData();
-  }, []);
+  }, [currentUser]);
 
   // 2. Data Action Handlers communicating with Express Backend
 
@@ -81,7 +141,7 @@ export default function App() {
   const handleAddStream = async (newStream: Omit<Stream, 'id'>) => {
     try {
       const id = `str_${Date.now()}`;
-      const res = await fetch('/api/streams', {
+      const res = await authenticatedFetch('/api/streams', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ ...newStream, id })
@@ -109,7 +169,7 @@ export default function App() {
       }
 
       const id = `std_${Date.now()}`;
-      const res = await fetch('/api/students', {
+      const res = await authenticatedFetch('/api/students', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ ...newStudent, id, admissionNo })
@@ -126,7 +186,7 @@ export default function App() {
   // EDIT Student
   const handleEditStudent = async (edited: Student) => {
     try {
-      const res = await fetch(`/api/students/${edited.id}`, {
+      const res = await authenticatedFetch(`/api/students/${edited.id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(edited)
@@ -143,7 +203,7 @@ export default function App() {
   // DELETE Student
   const handleDeleteStudent = async (studentId: string) => {
     try {
-      const res = await fetch(`/api/students/${studentId}`, {
+      const res = await authenticatedFetch(`/api/students/${studentId}`, {
         method: 'DELETE'
       });
       if (!res.ok) throw new Error('Failed to delete student record.');
@@ -164,7 +224,7 @@ export default function App() {
   const handleAddSubject = async (newSubject: Omit<Subject, 'id'>) => {
     try {
       const id = `subj_${Date.now()}`;
-      const res = await fetch('/api/subjects', {
+      const res = await authenticatedFetch('/api/subjects', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ ...newSubject, id })
@@ -181,7 +241,7 @@ export default function App() {
   // EDIT Subject
   const handleEditSubject = async (edited: Subject) => {
     try {
-      const res = await fetch(`/api/subjects/${edited.id}`, {
+      const res = await authenticatedFetch(`/api/subjects/${edited.id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(edited)
@@ -198,7 +258,7 @@ export default function App() {
   // DELETE Subject
   const handleDeleteSubject = async (subjectId: string) => {
     try {
-      const res = await fetch(`/api/subjects/${subjectId}`, {
+      const res = await authenticatedFetch(`/api/subjects/${subjectId}`, {
         method: 'DELETE'
       });
       if (!res.ok) throw new Error('Failed to delete subject.');
@@ -214,7 +274,7 @@ export default function App() {
   // UPSERT Score (Write transactional single grade)
   const handleUpsertScore = async (newScore: Omit<Score, 'id'>) => {
     try {
-      const res = await fetch('/api/scores', {
+      const res = await authenticatedFetch('/api/scores', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(newScore)
@@ -234,7 +294,7 @@ export default function App() {
   // BATCH UPSERT Scores
   const handleBatchUpsertScores = async (updatesList: Omit<Score, 'id'>[]) => {
     try {
-      const res = await fetch('/api/scores/batch', {
+      const res = await authenticatedFetch('/api/scores/batch', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(updatesList)
@@ -262,7 +322,7 @@ export default function App() {
   // UPDATE Configurable range boundaries
   const handleUpdateBoundaries = async (newBoundaries: GradeBoundary[]) => {
     try {
-      const res = await fetch('/api/grade-boundaries', {
+      const res = await authenticatedFetch('/api/grade-boundaries', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(newBoundaries)
@@ -288,7 +348,7 @@ export default function App() {
   // FORCE recalculations utility (re-fetches from database to ensure local state sync)
   const handleRefreshCalculations = async () => {
     try {
-      const res = await fetch('/api/all');
+      const res = await authenticatedFetch('/api/all');
       if (!res.ok) throw new Error('Failed to load database records');
       const data = await res.json();
       setStreams(data.streams);
@@ -314,8 +374,11 @@ export default function App() {
     { id: 'subjects', label: 'Curriculum', icon: BookOpen },
     { id: 'gradebook', label: 'Scoring Grid', icon: PencilLine },
     { id: 'rankings', label: 'Rankings Engine', icon: Trophy },
-    { id: 'database', label: 'SQL Terminal', icon: Database },
   ];
+
+  if (!currentUser) {
+    return <Login onLoginSuccess={handleLoginSuccess} />;
+  }
 
   if (isLoading) {
     return (
@@ -323,7 +386,7 @@ export default function App() {
         <div className="flex flex-col items-center space-y-4">
           <div className="relative w-16 h-16">
             <div className="absolute inset-0 rounded-full border-4 border-slate-700"></div>
-            <div className="absolute inset-0 rounded-full border-4 border-t-indigo-500 animate-spin"></div>
+            <div className="absolute inset-0 rounded-full border-4 border-t-slate-400 animate-spin"></div>
           </div>
           <h2 className="text-lg font-bold tracking-tight">Ikonex Academy</h2>
           <p className="text-xs text-slate-400 font-mono animate-pulse">Initializing Postgres Database Engine...</p>
@@ -341,7 +404,7 @@ export default function App() {
           <p className="text-sm text-slate-300 leading-relaxed font-sans">{error}</p>
           <button 
             onClick={() => window.location.reload()} 
-            className="w-full bg-indigo-650 hover:bg-indigo-700 text-white font-semibold py-2 px-4 rounded-lg transition-colors cursor-pointer text-xs"
+            className="w-full bg-slate-750 hover:bg-slate-700 text-white font-semibold py-2 px-4 rounded-lg transition-colors cursor-pointer text-xs"
           >
             Retry Connection
           </button>
@@ -351,16 +414,36 @@ export default function App() {
   }
 
   return (
-    <div className="min-h-screen bg-slate-50 flex flex-col md:flex-row antialiased font-sans" id="app_root_frame">
+    <div className="min-h-screen bg-slate-50 flex flex-col md:flex-row antialiased font-sans relative" id="app_root_frame">
       
+      {/* Mobile Drawer Overlay Backdrop */}
+      {isMobileMenuOpen && (
+        <div 
+          onClick={() => setIsMobileMenuOpen(false)}
+          className="fixed inset-0 bg-slate-950/40 backdrop-blur-xs z-40 md:hidden transition-opacity duration-300"
+        />
+      )}
+
       {/* Sidebar Navigation */}
-      <aside className="w-full md:w-64 bg-slate-900 text-slate-300 shrink-0 md:min-h-screen flex flex-col justify-between" id="app_sidebar">
+      <aside className={`fixed inset-y-0 left-0 w-64 bg-slate-900 text-slate-300 shrink-0 flex flex-col justify-between z-50 transform transition-transform duration-300 ease-in-out md:relative md:translate-x-0 ${
+        isMobileMenuOpen ? 'translate-x-0' : '-translate-x-full'
+      }`} id="app_sidebar">
         
         <div>
           {/* Logo brand */}
-          <div className="p-6 flex items-center gap-3 border-b border-slate-800">
-            <div className="w-8 h-8 bg-indigo-500 rounded-lg flex items-center justify-center font-bold text-white">I</div>
-            <span className="text-white font-bold text-lg tracking-tight">Ikonex Academy</span>
+          <div className="p-6 flex items-center justify-between gap-3 border-b border-slate-800">
+            <div className="flex items-center gap-3">
+              <div className="w-8 h-8 bg-slate-700 rounded-lg flex items-center justify-center font-bold text-white">I</div>
+              <span className="text-white font-bold text-lg tracking-tight">Ikonex Academy</span>
+            </div>
+            {/* Mobile Close Button */}
+            <button 
+              onClick={() => setIsMobileMenuOpen(false)}
+              className="md:hidden text-slate-400 hover:text-white p-1 hover:bg-slate-800 rounded-lg transition-colors cursor-pointer"
+              aria-label="Close menu"
+            >
+              <X size={18} />
+            </button>
           </div>
 
           {/* Navigation Links */}
@@ -375,6 +458,7 @@ export default function App() {
                   onClick={() => {
                     setActiveTab(item.id);
                     setSelectedStudentProfileId(null); // clear inner profile lookups
+                    setIsMobileMenuOpen(false); // auto-close menu on selection
                   }}
                   className={`w-full text-left p-3 rounded-lg flex items-center gap-3 text-sm font-medium transition-colors cursor-pointer ${
                     isActive 
@@ -392,14 +476,23 @@ export default function App() {
 
         {/* Administrator profile in footer */}
         <div className="p-6 border-t border-slate-800">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-full bg-slate-700 flex items-center justify-center font-bold text-white text-sm font-mono select-none">
-              LA
+          <div className="flex items-center justify-between gap-3">
+            <div className="flex items-center gap-3 min-w-0">
+              <div className="w-10 h-10 rounded-full bg-slate-700 flex items-center justify-center font-bold text-white text-sm font-mono select-none shrink-0">
+                {currentUser?.name.substring(0, 2).toUpperCase() || 'LA'}
+              </div>
+              <div className="min-w-0 flex-1">
+                <p className="text-xs text-slate-400 truncate">{currentUser?.username}</p>
+                <p className="text-sm font-semibold text-white truncate">{currentUser?.role || 'Administrator'}</p>
+              </div>
             </div>
-            <div className="min-w-0 flex-1">
-              <p className="text-xs text-slate-400 truncate">lekoringoeliakim</p>
-              <p className="text-sm font-semibold text-white truncate">Administrator</p>
-            </div>
+            <button 
+              onClick={handleLogout}
+              className="text-slate-500 hover:text-rose-400 transition-colors p-1.5 rounded-lg hover:bg-slate-800 cursor-pointer"
+              title="Log Out"
+            >
+              <LogOut size={16} />
+            </button>
           </div>
         </div>
 
@@ -409,21 +502,32 @@ export default function App() {
       <main className="grow flex flex-col min-w-0" id="main_viewport">
         
         {/* Top Header */}
-        <header className="h-16 bg-white border-b border-slate-200 px-8 flex items-center justify-between shadow-sm shrink-0" id="app_header">
-          <div className="flex items-center space-x-2">
-            <span className="text-xs font-mono font-bold text-slate-400 uppercase">Current Module:</span>
-            <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-indigo-50 text-indigo-700 tracking-tight border border-indigo-100">
-              {sidebarItems.find(i => i.id === activeTab)?.label}
-            </span>
+        <header className="h-16 bg-white border-b border-slate-200 px-4 sm:px-8 flex items-center justify-between shadow-sm shrink-0 animate-fade-in" id="app_header">
+          <div className="flex items-center space-x-3">
+            {/* Burger menu button for mobile screens */}
+            <button
+              onClick={() => setIsMobileMenuOpen(true)}
+              className="md:hidden p-1.5 text-slate-600 hover:bg-slate-100 rounded-lg transition-colors cursor-pointer"
+              aria-label="Open menu"
+            >
+              <Menu size={20} />
+            </button>
+
+            <div className="flex items-center space-x-2">
+              <span className="text-xs font-mono font-bold text-slate-400 uppercase hidden sm:inline">Current Module:</span>
+              <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-slate-100 text-slate-700 tracking-tight border border-slate-200">
+                {sidebarItems.find(i => i.id === activeTab)?.label}
+              </span>
+            </div>
           </div>
 
           <div className="flex items-center space-x-4 text-xs font-medium text-slate-500">
             <div className="hidden sm:block text-right">
-              <span className="block font-bold text-slate-700">lekoringoeliakim</span>
-              <span className="text-[10px] text-slate-400 block font-mono">lekoringoeliakim@gmail.com</span>
+              <span className="block font-bold text-slate-700">{currentUser?.name}</span>
+              <span className="text-[10px] text-slate-400 block font-mono">{currentUser?.email}</span>
             </div>
             <div className="w-8 h-8 rounded-full bg-slate-200 flex items-center justify-center font-bold text-slate-700 border border-slate-300 select-none">
-              LA
+              {currentUser?.name.substring(0, 2).toUpperCase() || 'LA'}
             </div>
           </div>
         </header>
@@ -504,15 +608,7 @@ export default function App() {
             />
           )}
 
-          {activeTab === 'database' && (
-            <DatabaseViewer 
-              students={students}
-              streams={streams}
-              subjects={subjects}
-              scores={scores}
-              results={processedResults}
-            />
-          )}
+
 
         </div>
 

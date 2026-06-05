@@ -164,7 +164,7 @@ export default function Dashboard({ students, streams, subjects, results, onNavi
                     style={{ width: `${sp.average}%` }}
                   />
                   <span className="text-xs font-semibold text-slate-600 z-10 font-mono">
-                    {sp.average >= 75 ? '🏆 Top Academic Quality' : sp.average >= 60 ? '⚡ Stable Performance' : sp.average > 0 ? '📝 Needs Assessment' : '🚫 No Scores Recorded'}
+                    {sp.average >= 75 ? 'Top Academic Quality' : sp.average >= 60 ? 'Stable Performance' : sp.average > 0 ? 'Needs Assessment' : 'No Scores Recorded'}
                   </span>
                 </div>
               </div>
@@ -203,19 +203,6 @@ export default function Dashboard({ students, streams, subjects, results, onNavi
               ) : (
                 <p className="text-xs text-slate-400 text-center py-4">No scores configured yet. Go to Gradebook to submit exams.</p>
               )}
-            </div>
-          </div>
-          
-          {/* Integrity Badge */}
-          <div className="bg-amber-50/50 border border-amber-200/60 rounded-xl p-4 flex items-start space-x-3">
-            <div className="p-1.5 bg-amber-100 text-amber-700 rounded-md shrink-0">
-              <ShieldCheck size={18} />
-            </div>
-            <div className="space-y-1">
-              <h4 className="text-xs font-bold text-amber-800">Double-Verification Engine</h4>
-              <p className="text-[10px] leading-relaxed text-amber-700">
-                Grades, scores, rankings, subject positions, and total averages are synchronized on-device using atomic integrity constraints. Score overrides prevent duplication.
-              </p>
             </div>
           </div>
         </div>

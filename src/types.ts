@@ -75,3 +75,11 @@ export interface StudentResultSummary {
   classPosition: number;
   totalStudentsInClass: number;
 }
+
+export interface User {
+  id: string;
+  username: string;
+  email: string;
+  name: string;
+  role: string;
+}

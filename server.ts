@@ -8,6 +8,8 @@ import pg from 'pg';
 import dotenv from 'dotenv';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import fs from 'fs';
+import admin from 'firebase-admin';
 
 // Load initial data and models directly from frontend definitions
 import { 
@@ -25,6 +27,46 @@ const __dirname = path.dirname(__filename);
 
 const app = express();
 app.use(express.json());
+
+// Initialize Firebase Admin SDK
+try {
+  const serviceAccountPath = path.join(__dirname, 'firebase-service-account.json');
+  if (fs.existsSync(serviceAccountPath)) {
+    const serviceAccount = JSON.parse(fs.readFileSync(serviceAccountPath, 'utf8'));
+    admin.initializeApp({
+      credential: admin.credential.cert(serviceAccount)
+    });
+    console.log('Firebase Admin SDK initialized successfully.');
+  } else {
+    console.warn('WARNING: firebase-service-account.json not found. API authentication disabled.');
+  }
+} catch (error) {
+  console.error('Failed to initialize Firebase Admin SDK:', error);
+}
+
+// Authentication Middleware
+async function authenticateToken(req: any, res: any, next: any) {
+  // If Firebase Admin SDK is not initialized, bypass verification for development
+  if (admin.apps.length === 0) {
+    return next();
+  }
+
+  const authHeader = req.headers['authorization'];
+  const token = authHeader && authHeader.split(' ')[1];
+  
+  if (!token) {
+    return res.status(401).json({ error: 'Access token required' });
+  }
+
+  try {
+    const decodedToken = await admin.auth().verifyIdToken(token);
+    req.user = decodedToken;
+    next();
+  } catch (error) {
+    console.error('Token verification failed:', error);
+    return res.status(403).json({ error: 'Invalid or expired access token' });
+  }
+}
 
 // Set up Postgres connection pool
 const connectionString = process.env.DATABASE_URL;
@@ -106,6 +148,23 @@ async function initDatabase() {
     );
   `);
 
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS users (
+      id VARCHAR(36) PRIMARY KEY,
+      username VARCHAR(50) UNIQUE NOT NULL,
+      password VARCHAR(100) NOT NULL,
+      email VARCHAR(100) NOT NULL,
+      name VARCHAR(100) NOT NULL,
+      role VARCHAR(20) DEFAULT 'Admin'
+    );
+  `);
+
+  await pool.query(`
+    INSERT INTO users (id, username, password, email, name, role)
+    VALUES ('usr_admin', 'lekoringoeliakim', '12345678', 'lekoringoeliakim@gmail.com', 'lekoringoeliakim', 'Admin')
+    ON CONFLICT (username) DO NOTHING
+  `);
+
   // 2. Check if database is empty (no streams seeded)
   const streamsCheck = await pool.query('SELECT COUNT(*) FROM streams');
   const count = parseInt(streamsCheck.rows[0].count, 10);
@@ -177,6 +236,45 @@ async function initDatabase() {
 // ----------------------------------------------------
 // API ROUTES
 // ----------------------------------------------------
+
+// Apply auth middleware to all secure /api routes
+app.use('/api', (req, res, next) => {
+  // Allow login endpoint without authentication
+  if (req.path === '/login') {
+    return next();
+  }
+  authenticateToken(req, res, next);
+});
+
+// POST /api/login
+app.post('/api/login', async (req, res) => {
+  try {
+    const { username, password } = req.body;
+    if (!username || !password) {
+      return res.status(400).json({ error: 'Username and password are required' });
+    }
+    const result = await pool.query('SELECT * FROM users WHERE username = $1 OR email = $1', [username]);
+    if (result.rows.length === 0) {
+      return res.status(401).json({ error: 'Invalid username/email or password' });
+    }
+    const user = result.rows[0];
+    if (user.password !== password) {
+      return res.status(401).json({ error: 'Invalid username/email or password' });
+    }
+    res.json({
+      user: {
+        id: user.id,
+        username: user.username,
+        email: user.email,
+        name: user.name,
+        role: user.role
+      }
+    });
+  } catch (error: any) {
+    console.error('Error during login validation:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
 
 // GET /api/all
 app.get('/api/all', async (req, res) => {
