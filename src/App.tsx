@@ -26,6 +26,7 @@ import StudentManager from './components/StudentManager';
 import SubjectManager from './components/SubjectManager';
 import Gradebook from './components/Gradebook';
 import Rankings from './components/Rankings';
+import Chatbot from './components/Chatbot';
 
 // Icon imports
 import { 
@@ -613,6 +614,17 @@ export default function App() {
         </div>
 
       </main>
+
+      {/* Floating Chatbot Assistant */}
+      <Chatbot
+        students={students}
+        streams={streams}
+        subjects={subjects}
+        scores={scores}
+        results={processedResults}
+        gradeBoundaries={gradeBoundaries}
+        authenticatedFetch={authenticatedFetch}
+      />
 
     </div>
   );

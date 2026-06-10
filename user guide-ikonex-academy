@@ -1,0 +1,96 @@
+# Ikonex Academy - School Management System User Guide
+
+Welcome to the **Ikonex Academy School Management System (SMS)** user guide. This document covers system setup, configuration, deployment on Render, and system usage.
+
+---
+
+## 1. System Setup & Configuration
+
+### Prerequisites
+- **Node.js** (v18 or higher)
+- **PostgreSQL Database** (e.g., Neon serverless instance)
+- **Firebase Project** with Email/Password authentication enabled
+
+### 1.1 Local Environment Variables (`.env`)
+Create a `.env` file in the root directory and populate it with your database and Firebase Client keys:
+
+```ini
+# Server Configuration
+DATABASE_URL="postgresql://[username]:[password]@[host]/[dbname]?sslmode=require"
+PORT=5000
+
+# Firebase Client Configuration (Frontend)
+VITE_FIREBASE_API_KEY="your_firebase_api_key"
+VITE_FIREBASE_AUTH_DOMAIN="your_project.firebaseapp.com"
+VITE_FIREBASE_PROJECT_ID="your_project_id"
+VITE_FIREBASE_STORAGE_BUCKET="your_project.firebasestorage.app"
+VITE_FIREBASE_MESSAGING_SENDER_ID="your_sender_id"
+VITE_FIREBASE_APP_ID="your_app_id"
+VITE_FIREBASE_MEASUREMENT_ID="your_measurement_id"
+```
+
+### 1.2 Firebase Admin Credentials
+Save your Firebase Admin SDK service account key JSON in the root directory as `firebase-service-account.json`. 
+
+> [!WARNING]
+> Keep this file secure. It is added to `.gitignore` by default to prevent pushing to public repositories.
+
+---
+
+## 2. Deployment Instructions (Render)
+
+To deploy the unified application to Render:
+
+1. **Create a Web Service** on Render connected to your Git repository.
+2. **Configure Environment Variables**:
+   - Add all environment variables from your `.env` (e.g., `DATABASE_URL`, `VITE_FIREBASE_API_KEY`, etc.).
+   - Set `NODE_ENV` to `production`.
+3. **Configure the Secret File**:
+   - In the **Environment** tab of your Render service, click **Add Secret File**.
+   - Set the filename to `firebase-service-account.json`.
+   - Paste the contents of your local `firebase-service-account.json` file.
+4. **Build & Start Commands**:
+   - **Build Command:** `npm install && npm run build`
+   - **Start Command:** `npm run start`
+
+---
+
+## 3. System Usage Guide
+
+### 3.1 Dashboard & KPIs
+The landing page provides academic performance indicators:
+- **Total Students, Streams, and Courses** active in the system.
+- **Pass Rate & Mean Score:** Dynamically computed from all gradebook entries.
+- **Stream Performance Chart:** Compares class averages to identify streams requiring attention.
+- **Academic Leaderboard:** Lists top-performing students across the academy.
+
+### 3.2 Managing Class Streams
+Navigate to **Class Streams** to:
+- Add new class streams (e.g., "Grade 10-A", "Grade 10-B").
+- Assign physical room numbers and class teachers.
+- View class-specific rosters and room details.
+
+### 3.3 Student Directory
+Navigate to **Student Folder** to:
+- Register new students. Admission numbers are automatically generated (`IXA-YYYY-XXX`).
+- Update student profiles (DOB, Gender, Parent/Guardian contact details).
+- Change status (Active, Suspended, Transferred).
+- Access individual **Report Cards** with detailed subject breakdowns, class position rankings, and a PDF download feature.
+
+### 3.4 Curriculum Management
+Navigate to **Curriculum** to:
+- Manage subjects, course codes, and departments.
+- Assign subjects to specific Class Streams to populate their study schedules.
+
+### 3.5 Gradebook (Scoring Grid)
+Navigate to **Scoring Grid** to input student assessment marks:
+- Select a **Stream** and a **Subject**.
+- Input **Continuous Assessment (CA)** (out of 30) and **Exam** marks (out of 70).
+- System validates score ranges in real-time.
+- Click **Save Grades** to persist records to the database.
+
+### 3.6 Rankings Engine & Grade Boundaries
+Navigate to **Rankings Engine** to:
+- Define grading bands (A, B, C, D, F) with customizable point boundaries and remarks.
+- Click **Update Grading Criteria** to save. This automatically triggers a recalculation of all grades in the database.
+- Recalculate stream-wise positions using a dense ranking algorithm based on student term averages.
